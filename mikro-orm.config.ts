@@ -4,6 +4,7 @@ import { defineConfig } from '@mikro-orm/postgresql';
 import { Migrator } from '@mikro-orm/migrations';
 import { ReflectMetadataProvider } from '@mikro-orm/decorators/legacy';
 import { WalletEntity } from './src/modules/wallet/infrastructure/persistence/wallet.entity.js';
+import { WalletLedgerEntryEntity } from './src/modules/wallet/infrastructure/persistence/wallet-ledger-entry.entity.js';
 
 export default defineConfig({
   host: process.env.DB_HOST ?? 'localhost',
@@ -13,7 +14,10 @@ export default defineConfig({
   user: process.env.DB_USERNAME ?? 'wagering',
   password: process.env.DB_PASSWORD ?? 'wagering',
 
-  entities: [WalletEntity],
+  entities: [
+  WalletEntity,
+  WalletLedgerEntryEntity,
+],
 
   metadataProvider: ReflectMetadataProvider,
 
