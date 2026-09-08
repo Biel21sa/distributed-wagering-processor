@@ -43,15 +43,6 @@ describe('Money', () => {
     ).toThrow(InvalidMoneyError);
   });
 
-  test('should reject negative values', () => {
-    expect(() =>
-      Money.from({
-        amount: '-10.00',
-        currency: 'BRL',
-      }),
-    ).toThrow(InvalidMoneyError);
-  });
-
   test('should reject invalid values', () => {
     expect(() =>
       Money.from({

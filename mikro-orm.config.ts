@@ -5,6 +5,7 @@ import { Migrator } from '@mikro-orm/migrations';
 import { ReflectMetadataProvider } from '@mikro-orm/decorators/legacy';
 import { WalletEntity } from './src/modules/wallet/infrastructure/persistence/wallet.entity.js';
 import { WalletLedgerEntryEntity } from './src/modules/wallet/infrastructure/persistence/wallet-ledger-entry.entity.js';
+import { WagerTransactionEntity } from './src/modules/wagering/infrastructure/persistence/wager-transaction.entity.js';
 
 export default defineConfig({
   host: process.env.DB_HOST ?? 'localhost',
@@ -15,9 +16,10 @@ export default defineConfig({
   password: process.env.DB_PASSWORD ?? 'wagering',
 
   entities: [
-  WalletEntity,
-  WalletLedgerEntryEntity,
-],
+    WalletEntity,
+    WalletLedgerEntryEntity,
+    WagerTransactionEntity,
+  ],
 
   metadataProvider: ReflectMetadataProvider,
 

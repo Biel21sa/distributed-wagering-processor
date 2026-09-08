@@ -1,6 +1,5 @@
-import { Decimal } from "decimal.js";
-import { CurrencyMismatchError, InvalidMoneyError } from "../../../shared/domain/errors/money.error.js";
-
+import { Decimal } from 'decimal.js';
+import { CurrencyMismatchError, InvalidMoneyError } from '../../../shared/domain/errors/money.error.js';
 
 export interface MoneyProps {
   amount: string;
@@ -18,9 +17,7 @@ export class Money {
     const amount = props.amount?.trim();
 
     if (!currency) {
-      throw new InvalidMoneyError(
-        'Currency is required',
-      );
+      throw new InvalidMoneyError('Currency is required');
     }
 
     if (!/^[A-Z]{3}$/.test(currency)) {
@@ -30,9 +27,7 @@ export class Money {
     }
 
     if (!amount) {
-      throw new InvalidMoneyError(
-        'Amount is required',
-      );
+      throw new InvalidMoneyError('Amount is required');
     }
 
     if (!/^-?\d+(\.\d+)?$/.test(amount)) {
@@ -49,15 +44,7 @@ export class Money {
       );
     }
 
-    if (decimal.isNegative()) {
-      throw new InvalidMoneyError(
-        'Amount cannot be negative',
-      );
-    }
-
-    const decimalPlaces = decimal.decimalPlaces();
-
-    if (decimalPlaces > 2) {
+    if (decimal.decimalPlaces() > 2) {
       throw new InvalidMoneyError(
         'Amount cannot have more than 2 decimal places',
       );
@@ -67,6 +54,18 @@ export class Money {
       decimal.toDecimalPlaces(2),
       currency,
     );
+  }
+
+  static nonNegative(props: MoneyProps): Money {
+    const money = Money.from(props);
+
+    if (money.isNegative()) {
+      throw new InvalidMoneyError(
+        'Amount cannot be negative',
+      );
+    }
+
+    return money;
   }
 
   static zero(currency: string): Money {
@@ -90,23 +89,19 @@ export class Money {
   subtract(other: Money): Money {
     this.assertSameCurrency(other);
 
-    const result = this.value.minus(other.value);
-
-    if (result.isNegative()) {
-      throw new InvalidMoneyError(
-        'Money result cannot be negative',
-      );
-    }
-
     return Money.from({
-      amount: result.toFixed(2),
+      amount: this.value
+        .minus(other.value)
+        .toFixed(2),
       currency: this.currency,
     });
   }
 
   negate(): Money {
-    return Money.fromAllowNegative({
-      amount: this.value.negated().toFixed(2),
+    return Money.from({
+      amount: this.value
+        .negated()
+        .toFixed(2),
       currency: this.currency,
     });
   }
@@ -135,6 +130,14 @@ export class Money {
     return this.value.greaterThan(other.value);
   }
 
+  isGreaterThanOrEqual(other: Money): boolean {
+    this.assertSameCurrency(other);
+
+    return this.value.greaterThanOrEqualTo(
+      other.value,
+    );
+  }
+
   equals(other: Money): boolean {
     return (
       this.currency === other.currency &&
@@ -160,53 +163,5 @@ export class Money {
         other.currency,
       );
     }
-  }
-
-  /**
-   * Apenas para operações internas do domínio
-   * que podem produzir valor negativo, como negate().
-   */
-  private static fromAllowNegative(
-    props: MoneyProps,
-  ): Money {
-    const currency = props.currency?.trim().toUpperCase();
-    const amount = props.amount?.trim();
-
-    if (
-      !currency ||
-      !/^[A-Z]{3}$/.test(currency)
-    ) {
-      throw new InvalidMoneyError(
-        'Invalid currency',
-      );
-    }
-
-    if (
-      !amount ||
-      !/^-?\d+(\.\d+)?$/.test(amount)
-    ) {
-      throw new InvalidMoneyError(
-        'Invalid amount',
-      );
-    }
-
-    const decimal = new Decimal(amount);
-
-    if (!decimal.isFinite()) {
-      throw new InvalidMoneyError(
-        'Amount must be finite',
-      );
-    }
-
-    if (decimal.decimalPlaces() > 2) {
-      throw new InvalidMoneyError(
-        'Amount cannot have more than 2 decimal places',
-      );
-    }
-
-    return new Money(
-      decimal.toDecimalPlaces(2),
-      currency,
-    );
   }
 }
