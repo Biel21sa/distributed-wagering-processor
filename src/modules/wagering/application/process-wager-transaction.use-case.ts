@@ -1,12 +1,14 @@
+import { EntityManager } from '@mikro-orm/postgresql';
 import { randomUUID } from "crypto";
+import { Money } from "../../wallet/domain/money.js";
 import { WalletLedgerEntry, LedgerDirection } from "../../wallet/domain/wallet-ledger-entry.js";
 import { FailureCode } from "../domain/failure-code.js";
 import { WagerTransactionKind } from "../domain/wager-transaction-kind.js";
 import { WagerTransactionStatus } from "../domain/wager-transaction-status.js";
 import { WagerTransaction } from "../domain/wager-transaction.js";
 import { WagerTransactionRepository } from "./ports/wager-transaction-repository.port.js";
+import { WalletLedgerRepository } from "./ports/wallet-ledger-repository.port.js";
 import { WalletRepository } from "./ports/wallet-repository.port.js";
-import { Money } from "../../wallet/domain/money.js";
 
 
 export interface ProcessWagerTransactionInput {
@@ -14,7 +16,6 @@ export interface ProcessWagerTransactionInput {
   externalTransactionId: string;
 
   idempotencyKey: string;
-
   payloadHash: string;
 
   playerId: string;
@@ -33,70 +34,54 @@ export interface ProcessWagerTransactionInput {
   referenceExternalTransactionId?: string;
 }
 
+export interface ProcessWagerTransactionResult {
+  transactionId: string;
+
+  status: WagerTransactionStatus;
+
+  balance: {
+    amount: string;
+    currency: string;
+  };
+
+  idempotentReplay: boolean;
+
+  failureCode?: FailureCode;
+}
+
 export class ProcessWagerTransactionUseCase {
   constructor(
     private readonly walletRepository: WalletRepository,
-    private readonly transactionRepository: WagerTransactionRepository,
+
+    private readonly transactionRepository:
+      WagerTransactionRepository,
+
+    private readonly ledgerRepository:
+      WalletLedgerRepository,
+
+    private readonly em: EntityManager,
   ) {}
 
   async execute(
     input: ProcessWagerTransactionInput,
-  ): Promise<{
-    result: {
-      transactionId: string;
-      status: WagerTransactionStatus;
-      balance: {
-        amount: string;
-        currency: string;
-      };
-      idempotentReplay: boolean;
-      failureCode?: FailureCode;
-    };
-    ledgerEntry?: WalletLedgerEntry;
-  }> {
-    // Implementaremos a transação SQL real na próxima etapa.
-    // Por enquanto, estamos estabelecendo a regra de negócio.
-
-    const existingByKey =
-      await this.transactionRepository
-        .findByIdempotencyKey(
-          input.idempotencyKey,
+  ): Promise<ProcessWagerTransactionResult> {
+    return this.em.transactional(
+      async (em) => {
+        return this.executeTransaction(
+          em,
+          input,
         );
+      },
+      {
+        clear: true,
+      },
+    );
+  }
 
-    if (existingByKey) {
-      if (
-        !existingByKey.matchesPayload(
-          input.payloadHash,
-        )
-      ) {
-        throw new Error(
-          'IDEMPOTENCY_CONFLICT',
-        );
-      }
-
-      const wallet =
-        await this.walletRepository.findById(
-          existingByKey.walletId,
-        );
-
-      if (!wallet) {
-        throw new Error(
-          'Wallet not found',
-        );
-      }
-
-      return {
-        result: {
-          transactionId: existingByKey.id,
-          status: existingByKey.status,
-          balance: wallet.balance.toJSON(),
-          idempotentReplay: true,
-          failureCode:
-            existingByKey.failureCode,
-        },
-      };
-    }
-
+  private async executeTransaction(
+    em: EntityManager,
+    input: ProcessWagerTransactionInput,
+  ): Promise<ProcessWagerTransactionResult> {
     const transaction =
       WagerTransaction.create({
         id: randomUUID(),
@@ -113,11 +98,11 @@ export class ProcessWagerTransactionUseCase {
         payloadHash:
           input.payloadHash,
 
-        walletId:
-          input.walletId,
-
         playerId:
           input.playerId,
+
+        walletId:
+          input.walletId,
 
         roundId:
           input.roundId,
@@ -128,16 +113,19 @@ export class ProcessWagerTransactionUseCase {
         kind:
           input.kind,
 
-        money: Money.from(input.money),
+        money:
+          Money.from(input.money),
 
         referenceExternalTransactionId:
           input.referenceExternalTransactionId,
       });
 
     const wallet =
-      await this.walletRepository.findById(
-        transaction.walletId,
-      );
+      await this.walletRepository
+        .findByIdForUpdate(
+          em,
+          input.walletId,
+        );
 
     if (!wallet) {
       transaction.reject(
@@ -145,35 +133,36 @@ export class ProcessWagerTransactionUseCase {
       );
 
       await this.transactionRepository.save(
+        em,
         transaction,
       );
 
       return {
-        result: {
-          transactionId:
-            transaction.id,
-          status:
-            transaction.status,
-          balance: {
-            amount: '0.00',
-            currency:
-              transaction.money.currency,
-          },
-          idempotentReplay: false,
-          failureCode:
-            transaction.failureCode,
-        },
+        transactionId:
+          transaction.id,
+
+        status:
+          transaction.status,
+
+        balance:
+          transaction.money.toJSON(),
+
+        idempotentReplay:
+          false,
+
+        failureCode:
+          transaction.failureCode,
       };
     }
 
     const balanceBefore =
       wallet.balance;
 
-    try {
-      let ledgerEntry:
-        | WalletLedgerEntry
-        | undefined;
+    let ledgerEntry:
+      | WalletLedgerEntry
+      | undefined;
 
+    try {
       switch (transaction.kind) {
         case WagerTransactionKind.Bet: {
           wallet.debit(
@@ -258,9 +247,6 @@ export class ProcessWagerTransactionUseCase {
         case WagerTransactionKind.Rollback: {
           transaction.markPendingReference();
 
-          // A resolução da referência entra
-          // logo depois desta etapa.
-
           break;
         }
 
@@ -272,15 +258,55 @@ export class ProcessWagerTransactionUseCase {
       }
 
       await this.transactionRepository.save(
+        em,
         transaction,
       );
 
       await this.walletRepository.save(
+        em,
         wallet,
       );
 
+      if (ledgerEntry) {
+        await this.ledgerRepository.save(
+          em,
+          ledgerEntry,
+        );
+      }
+
       return {
-        result: {
+        transactionId:
+          transaction.id,
+
+        status:
+          transaction.status,
+
+        balance:
+          wallet.balance.toJSON(),
+
+        idempotentReplay:
+          false,
+
+        failureCode:
+          transaction.failureCode,
+      };
+    } catch (error) {
+      if (
+        error instanceof
+        Error &&
+        error.message ===
+          'Wallet has insufficient funds'
+      ) {
+        transaction.reject(
+          FailureCode.InsufficientFunds,
+        );
+
+        await this.transactionRepository.save(
+          em,
+          transaction,
+        );
+
+        return {
           transactionId:
             transaction.id,
 
@@ -290,44 +316,11 @@ export class ProcessWagerTransactionUseCase {
           balance:
             wallet.balance.toJSON(),
 
-          idempotentReplay: false,
+          idempotentReplay:
+            false,
 
           failureCode:
             transaction.failureCode,
-        },
-
-        ledgerEntry,
-      };
-    } catch (error) {
-      if (
-        error instanceof Error &&
-        error.message ===
-          'Wallet has insufficient funds'
-      ) {
-        transaction.reject(
-          FailureCode.InsufficientFunds,
-        );
-
-        await this.transactionRepository.save(
-          transaction,
-        );
-
-        return {
-          result: {
-            transactionId:
-              transaction.id,
-
-            status:
-              transaction.status,
-
-            balance:
-              wallet.balance.toJSON(),
-
-            idempotentReplay: false,
-
-            failureCode:
-              transaction.failureCode,
-          },
         };
       }
 

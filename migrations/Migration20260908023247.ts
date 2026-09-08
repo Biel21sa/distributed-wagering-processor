@@ -10,6 +10,7 @@ export class Migration20260908023247 extends Migration {
     this.addSql(`alter table "wallet_ledger_entries" add constraint "uq_ledger_transaction_wallet" unique ("wallet_id", "transaction_id");`);
     this.addSql(`alter table "wallet_ledger_entries" add constraint "wallet_ledger_entries_direction_check" check ("direction" in ('DEBIT', 'CREDIT'));`);
     this.addSql(`ALTER TABLE "wallet_ledger_entries" ADD CONSTRAINT "fk_ledger_wallet" FOREIGN KEY ("wallet_id") REFERENCES "wallets" ("id");`)
+    this.addSql(`ALTER TABLE "wallet_ledger_entries" ADD CONSTRAINT "fk_ledger_transaction" FOREIGN KEY ("transaction_id") REFERENCES "wager_transactions" ("id");`)
   }
 
   override down(): void | Promise<void> {

@@ -1,11 +1,24 @@
-import { Wallet } from "../../../wallet/domain/wallet.js";
+import {
+  EntityManager,
+} from '@mikro-orm/postgresql';
+import { Wallet } from '../../../wallet/domain/wallet.js';
 
-export const WALLET_REPOSITORY = Symbol(
-  'WALLET_REPOSITORY',
-);
+export const WALLET_REPOSITORY =
+  Symbol('WALLET_REPOSITORY');
 
 export interface WalletRepository {
-  findById(id: string): Promise<Wallet | null>;
+  findById(
+    em: EntityManager,
+    id: string,
+  ): Promise<Wallet | null>;
 
-  save(wallet: Wallet): Promise<void>;
+  findByIdForUpdate(
+    em: EntityManager,
+    id: string,
+  ): Promise<Wallet | null>;
+
+  save(
+    em: EntityManager,
+    wallet: Wallet,
+  ): Promise<void>;
 }
