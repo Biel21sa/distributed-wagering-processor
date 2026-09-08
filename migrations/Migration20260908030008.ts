@@ -9,6 +9,7 @@ export class Migration20260908030008 extends Migration {
     this.addSql(`create index "idx_wager_wallet" on "wager_transactions" ("wallet_id");`);
     this.addSql(`alter table "wager_transactions" add constraint "uq_wager_provider_external_id" unique ("provider_id", "external_transaction_id");`);
     this.addSql(`alter table "wager_transactions" add constraint "uq_wager_idempotency_key" unique ("idempotency_key");`);
+    this.addSql(`alter table "wallet_ledger_entries" add constraint "fk_ledger_transaction" foreign key ("transaction_id") references "wager_transactions" ("id");`);
 
     this.addSql(`alter table "wallets" drop constraint "chk_wallet_balance_non_negative";`);
     this.addSql(`alter table "wallets" drop constraint "chk_wallet_version_positive";`);

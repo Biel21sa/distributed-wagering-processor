@@ -1,4 +1,4 @@
-import { EntityManager } from "@mikro-orm/core";
+import { EntityManager } from '@mikro-orm/postgresql';
 import { WalletLedgerRepository } from "../../../wagering/application/ports/wallet-ledger-repository.port.js";
 import { WalletLedgerEntry } from "../../domain/wallet-ledger-entry.js";
 import { WalletLedgerEntryMapper } from "./wallet-ledger-entry.mapper.js";

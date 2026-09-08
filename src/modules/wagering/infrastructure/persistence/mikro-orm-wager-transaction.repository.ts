@@ -1,4 +1,4 @@
-import { EntityManager } from "@mikro-orm/core";
+import { EntityManager } from '@mikro-orm/postgresql';
 import { Money } from "../../../wallet/domain/money.js";
 import { WagerTransactionRepository } from "../../application/ports/wager-transaction-repository.port.js";
 import { WagerTransaction } from "../../domain/wager-transaction.js";
