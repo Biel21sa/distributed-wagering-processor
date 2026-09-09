@@ -9,9 +9,6 @@ import { WagerTransaction } from "../domain/wager-transaction.js";
 import { WagerTransactionRepository } from "./ports/wager-transaction-repository.port.js";
 import { WalletLedgerRepository } from "./ports/wallet-ledger-repository.port.js";
 import { WalletRepository } from "./ports/wallet-repository.port.js";
-import { getUniqueViolationConstraint } from '../../../shared/infrastructure/database/postgres-error.js';
-import { IdempotencyConflictError } from '../domain/idempotency-conflict.error.js';
-import { buildIdempotentResponse } from './build-idempotent-response.js';
 
 
 export interface ProcessWagerTransactionInput {
@@ -68,65 +65,26 @@ export class ProcessWagerTransactionUseCase {
   async execute(
     input: ProcessWagerTransactionInput,
   ) {
-    try {
-      return await this.em.transactional(
-        async (em) => {
-          return this.executeTransaction(
-            em,
-            input,
-          );
-        },
-        {
-          clear: true,
-        },
-      );
-    } catch (error) {
-      const constraint =
-        getUniqueViolationConstraint(
-          error,
+    return this.em.transactional(
+      async (em) => {
+        return this.executeWithinTransaction(
+          em,
+          input,
         );
-
-      if (
-        constraint !==
-          'uq_wager_idempotency_key' &&
-        constraint !==
-          'uq_wager_provider_external_id'
-      ) {
-        throw error;
-      }
-
-      return this.handleIdempotencyReplay(
-        input,
-        error,
-      );
-    }
+      },
+      {
+        clear: true,
+      },
+    );
   }
 
-  private async handleIdempotencyReplay(
+  async executeWithinTransaction(
+    em: EntityManager,
     input: ProcessWagerTransactionInput,
-    originalError: unknown,
   ) {
-    const existing =
-      await this.transactionRepository
-        .findByIdempotencyKey(
-          this.em,
-          input.idempotencyKey,
-        );
-
-    if (!existing) {
-      throw originalError;
-    }
-
-    if (
-      !existing.matchesPayload(
-        input.payloadHash,
-      )
-    ) {
-      throw new IdempotencyConflictError();
-    }
-
-    return buildIdempotentResponse(
-      existing,
+    return this.executeTransaction(
+      em,
+      input,
     );
   }
 

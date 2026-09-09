@@ -21,5 +21,36 @@ services:
       timeout: 5s
       retries: 10
 
+  localstack:
+    image: localstack/localstack:latest
+    container_name: wagering-localstack
+    restart: unless-stopped
+
+    environment:
+      SERVICES: sqs
+      AWS_DEFAULT_REGION: us-east-1
+      LOCALSTACK_AUTH_TOKEN: ${LOCALSTACK_AUTH_TOKEN}
+      DEBUG: 0
+
+    ports:
+      - "4566:4566"
+
+    volumes:
+      - localstack_data:/var/lib/localstack
+      - "/var/run/docker.sock:/var/run/docker.sock"
+
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "awslocal",
+          "sqs",
+          "list-queues"
+        ]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
 volumes:
   postgres_data:
+  localstack_data:

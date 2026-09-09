@@ -19,6 +19,7 @@
     "migration:down": "mikro-orm migration:down --config ./mikro-orm.config.ts",
     "migration:check": "mikro-orm migration:check --config ./mikro-orm.config.ts",
     "migration:pending": "mikro-orm migration:pending --config ./mikro-orm.config.ts",
+    "seed:wager-wallet": "tsx scripts/create-test-wallet.ts",
     "migration:list": "mikro-orm migration:list --config ./mikro-orm.config.ts"
   },
   "mikro-orm": {
@@ -26,6 +27,7 @@
     "tsLoader": "tsx"
   },
   "dependencies": {
+    "@aws-sdk/client-sqs": "^3.1128.0",
     "@mikro-orm/core": "^7.1.15",
     "@mikro-orm/decorators": "^7.1.15",
     "@mikro-orm/migrations": "^7.1.15",
