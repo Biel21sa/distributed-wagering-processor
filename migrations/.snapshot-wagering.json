@@ -282,6 +282,40 @@
           "enumItems": [],
           "mappedType": "string"
         },
+        "response_balance_amount": {
+          "name": "response_balance_amount",
+          "type": "numeric(20,2)",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "unique": false,
+          "length": null,
+          "precision": 20,
+          "scale": 2,
+          "default": null,
+          "comment": null,
+          "collation": null,
+          "enumItems": [],
+          "mappedType": "decimal"
+        },
+        "response_balance_currency": {
+          "name": "response_balance_currency",
+          "type": "varchar(3)",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "unique": false,
+          "length": 3,
+          "precision": null,
+          "scale": null,
+          "default": null,
+          "comment": null,
+          "collation": null,
+          "enumItems": [],
+          "mappedType": "string"
+        },
         "round_id": {
           "name": "round_id",
           "type": "varchar(255)",
@@ -611,7 +645,30 @@
         }
       ],
       "triggers": [],
-      "foreignKeys": {},
+      "foreignKeys": {
+        "fk_ledger_transaction": {
+          "columnNames": [
+            "transaction_id"
+          ],
+          "constraintName": "fk_ledger_transaction",
+          "localTableName": "public.wallet_ledger_entries",
+          "referencedColumnNames": [
+            "id"
+          ],
+          "referencedTableName": "public.wager_transactions"
+        },
+        "fk_ledger_wallet": {
+          "columnNames": [
+            "wallet_id"
+          ],
+          "constraintName": "fk_ledger_wallet",
+          "localTableName": "public.wallet_ledger_entries",
+          "referencedColumnNames": [
+            "id"
+          ],
+          "referencedTableName": "public.wallets"
+        }
+      },
       "comment": null
     },
     {

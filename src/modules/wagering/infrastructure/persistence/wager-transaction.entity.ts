@@ -130,4 +130,18 @@ export class WagerTransactionEntity {
     nullable: true,
   })
   processedAt?: Date | null;
+
+  @Property({
+    type: 'string',
+    nullable: true,
+    columnType: 'numeric(20,2)',
+  })
+  responseBalanceAmount?: string | null;
+
+  @Property({
+    type: 'string',
+    nullable: true,
+    length: 3,
+  })
+  responseBalanceCurrency?: string | null;
 }

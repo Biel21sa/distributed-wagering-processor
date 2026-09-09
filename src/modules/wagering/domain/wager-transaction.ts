@@ -49,6 +49,7 @@ export interface WagerTransactionState {
   referenceTransactionId?: string;
   failureCode?: FailureCode;
   processedAt?: Date;
+  responseBalance?: Money;
 }
 
 export class WagerTransaction {
@@ -81,7 +82,9 @@ export class WagerTransaction {
     private _failureCode?: FailureCode,
 
     private _processedAt?: Date,
-  ) {}
+
+    private _responseBalance?: Money,
+  ) { }
 
   static create(
     props: CreateWagerTransactionProps,
@@ -125,9 +128,9 @@ export class WagerTransaction {
 
     if (
       props.kind ===
-        WagerTransactionKind.Refund ||
+      WagerTransactionKind.Refund ||
       props.kind ===
-        WagerTransactionKind.Rollback
+      WagerTransactionKind.Rollback
     ) {
       if (
         !props.referenceExternalTransactionId
@@ -140,9 +143,9 @@ export class WagerTransaction {
 
     if (
       props.kind !==
-        WagerTransactionKind.Refund &&
+      WagerTransactionKind.Refund &&
       props.kind !==
-        WagerTransactionKind.Rollback &&
+      WagerTransactionKind.Rollback &&
       props.referenceExternalTransactionId
     ) {
       throw new Error(
@@ -213,7 +216,12 @@ export class WagerTransaction {
       state.failureCode,
 
       state.processedAt,
+      state.responseBalance,
     );
+  }
+
+  get responseBalance(): Money | undefined {
+    return this._responseBalance;
   }
 
   get status(): WagerTransactionStatus {
@@ -239,20 +247,20 @@ export class WagerTransaction {
   isTerminal(): boolean {
     return (
       this._status ===
-        WagerTransactionStatus.Processed ||
+      WagerTransactionStatus.Processed ||
       this._status ===
-        WagerTransactionStatus.Rejected ||
+      WagerTransactionStatus.Rejected ||
       this._status ===
-        WagerTransactionStatus.Failed
+      WagerTransactionStatus.Failed
     );
   }
 
   requiresReference(): boolean {
     return (
       this.kind ===
-        WagerTransactionKind.Refund ||
+      WagerTransactionKind.Refund ||
       this.kind ===
-        WagerTransactionKind.Rollback
+      WagerTransactionKind.Rollback
     );
   }
 
@@ -271,6 +279,7 @@ export class WagerTransaction {
 
   markProcessed(
     referenceTransactionId: string | undefined,
+    responseBalance: Money,
     at: Date,
   ): void {
     this.assertNotTerminal();
@@ -282,7 +291,9 @@ export class WagerTransaction {
       referenceTransactionId;
 
     this._processedAt = at;
-    this._failureCode = undefined;
+
+    this._responseBalance =
+      responseBalance;
   }
 
   markPendingReference(): void {
@@ -292,13 +303,20 @@ export class WagerTransaction {
       WagerTransactionStatus.PendingReference;
   }
 
-  reject(code: FailureCode): void {
+  reject(
+    code: FailureCode,
+    responseBalance?: Money,
+  ): void {
     this.assertNotTerminal();
 
     this._status =
       WagerTransactionStatus.Rejected;
 
-    this._failureCode = code;
+    this._failureCode =
+      code;
+
+    this._responseBalance =
+      responseBalance;
   }
 
   fail(code: FailureCode): void {

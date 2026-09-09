@@ -9,6 +9,9 @@ import { WagerTransaction } from "../domain/wager-transaction.js";
 import { WagerTransactionRepository } from "./ports/wager-transaction-repository.port.js";
 import { WalletLedgerRepository } from "./ports/wallet-ledger-repository.port.js";
 import { WalletRepository } from "./ports/wallet-repository.port.js";
+import { getUniqueViolationConstraint } from '../../../shared/infrastructure/database/postgres-error.js';
+import { IdempotencyConflictError } from '../domain/idempotency-conflict.error.js';
+import { buildIdempotentResponse } from './build-idempotent-response.js';
 
 
 export interface ProcessWagerTransactionInput {
@@ -60,21 +63,70 @@ export class ProcessWagerTransactionUseCase {
       WalletLedgerRepository,
 
     private readonly em: EntityManager,
-  ) {}
+  ) { }
 
   async execute(
     input: ProcessWagerTransactionInput,
-  ): Promise<ProcessWagerTransactionResult> {
-    return this.em.transactional(
-      async (em) => {
-        return this.executeTransaction(
-          em,
-          input,
+  ) {
+    try {
+      return await this.em.transactional(
+        async (em) => {
+          return this.executeTransaction(
+            em,
+            input,
+          );
+        },
+        {
+          clear: true,
+        },
+      );
+    } catch (error) {
+      const constraint =
+        getUniqueViolationConstraint(
+          error,
         );
-      },
-      {
-        clear: true,
-      },
+
+      if (
+        constraint !==
+          'uq_wager_idempotency_key' &&
+        constraint !==
+          'uq_wager_provider_external_id'
+      ) {
+        throw error;
+      }
+
+      return this.handleIdempotencyReplay(
+        input,
+        error,
+      );
+    }
+  }
+
+  private async handleIdempotencyReplay(
+    input: ProcessWagerTransactionInput,
+    originalError: unknown,
+  ) {
+    const existing =
+      await this.transactionRepository
+        .findByIdempotencyKey(
+          this.em,
+          input.idempotencyKey,
+        );
+
+    if (!existing) {
+      throw originalError;
+    }
+
+    if (
+      !existing.matchesPayload(
+        input.payloadHash,
+      )
+    ) {
+      throw new IdempotencyConflictError();
+    }
+
+    return buildIdempotentResponse(
+      existing,
     );
   }
 
@@ -193,6 +245,7 @@ export class ProcessWagerTransactionUseCase {
 
           transaction.markProcessed(
             undefined,
+            wallet.balance,
             new Date(),
           );
 
@@ -228,6 +281,7 @@ export class ProcessWagerTransactionUseCase {
 
           transaction.markProcessed(
             undefined,
+            wallet.balance,
             new Date(),
           );
 
@@ -237,6 +291,7 @@ export class ProcessWagerTransactionUseCase {
         case WagerTransactionKind.Loss: {
           transaction.markProcessed(
             undefined,
+            wallet.balance,
             new Date(),
           );
 
@@ -261,6 +316,8 @@ export class ProcessWagerTransactionUseCase {
         em,
         transaction,
       );
+
+      await em.flush();
 
       await this.walletRepository.save(
         em,
@@ -295,10 +352,11 @@ export class ProcessWagerTransactionUseCase {
         error instanceof
         Error &&
         error.message ===
-          'Wallet has insufficient funds'
+        'Wallet has insufficient funds'
       ) {
         transaction.reject(
           FailureCode.InsufficientFunds,
+          wallet.balance,
         );
 
         await this.transactionRepository.save(

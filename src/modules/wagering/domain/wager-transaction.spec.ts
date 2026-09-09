@@ -104,6 +104,7 @@ describe(
 
         transaction.markProcessed(
           undefined,
+          validProps.money,
           new Date(),
         );
 
@@ -131,6 +132,7 @@ describe(
 
         transaction.markProcessed(
           undefined,
+          validProps.money,
           new Date(),
         );
 

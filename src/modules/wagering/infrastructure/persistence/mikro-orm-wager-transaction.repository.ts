@@ -138,6 +138,18 @@ export class MikroOrmWagerTransactionRepository
       processedAt:
         entity.processedAt
         ?? undefined,
+
+      responseBalance:
+        entity.responseBalanceAmount &&
+        entity.responseBalanceCurrency
+          ? Money.from({
+            amount:
+              entity.responseBalanceAmount,
+
+            currency:
+              entity.responseBalanceCurrency,
+          })
+          : undefined,
     });
   }
 }

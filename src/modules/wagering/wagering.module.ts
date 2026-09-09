@@ -19,6 +19,7 @@ import { ProcessWagerTransactionUseCase } from './application/process-wager-tran
 import { MikroOrmWagerTransactionRepository } from './infrastructure/persistence/mikro-orm-wager-transaction.repository.js';
 import { WagerTransactionEntity } from './infrastructure/persistence/wager-transaction.entity.js';
 import { WALLET_REPOSITORY } from './application/ports/wallet-repository.port.js';
+import { WageringController } from './wagering.controller.js';
 
 @Module({
   imports: [
@@ -69,8 +70,10 @@ import { WALLET_REPOSITORY } from './application/ports/wallet-repository.port.js
           ledgerRepository,
           em,
         ),
-    }
+    },
   ],
+
+  controllers: [WageringController],
 
   exports: [
     ProcessWagerTransactionUseCase,

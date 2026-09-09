@@ -70,6 +70,15 @@ export class WagerTransactionMapper {
       transaction.processedAt
       ?? null;
 
+    entity.responseBalanceAmount =
+      transaction.responseBalance
+        ?.toJSON()
+        .amount ?? null;
+
+    entity.responseBalanceCurrency =
+      transaction.responseBalance
+        ?.currency ?? null;
+
     return entity;
   }
 }
