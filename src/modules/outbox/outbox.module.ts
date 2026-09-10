@@ -21,6 +21,14 @@ import { MikroOrmOutboxPublisherRepository } from './infrastructure/persistence/
     providers: [
         {
             provide:
+                OUTBOX_REPOSITORY,
+
+            useClass:
+                MikroOrmOutboxRepository,
+        },
+
+        {
+            provide:
                 OUTBOX_PUBLISHER_REPOSITORY,
 
             useClass:

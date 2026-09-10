@@ -16,13 +16,16 @@ import {
   WagerTransactionRepository,
 } from './application/ports/wager-transaction-repository.port.js';
 import { ProcessWagerTransactionUseCase } from './application/process-wager-transaction.use-case.js';
+import { GetWagerTransactionUseCase } from './application/get-wager-transaction.use-case.js';
+import { GetProviderTransactionUseCase } from './application/get-provider-transaction.use-case.js';
 import { MikroOrmWagerTransactionRepository } from './infrastructure/persistence/mikro-orm-wager-transaction.repository.js';
 import { WagerTransactionEntity } from './infrastructure/persistence/wager-transaction.entity.js';
 import { WALLET_REPOSITORY } from './application/ports/wallet-repository.port.js';
-import { WageringController } from './wagering.controller.js';
 import { OutboxModule } from '../outbox/outbox.module.js';
 import { OUTBOX_REPOSITORY, OutboxRepository } from '../outbox/application/outbox-repository.port.js';
 import { PendingReferenceWorker } from './application/pending-reference.worker.js';
+import { ProviderTransactionController } from './api/provider-transaction.controller.js';
+import { WageringController } from './api/wagering.controller.js';
 
 @Module({
   imports: [
@@ -80,6 +83,38 @@ import { PendingReferenceWorker } from './application/pending-reference.worker.j
     },
 
     {
+      provide:
+        GetWagerTransactionUseCase,
+
+      inject: [
+        EntityManager,
+      ],
+
+      useFactory: (
+        em: EntityManager,
+      ) =>
+        new GetWagerTransactionUseCase(
+          em,
+        ),
+    },
+
+    {
+      provide:
+        GetProviderTransactionUseCase,
+
+      inject: [
+        EntityManager,
+      ],
+
+      useFactory: (
+        em: EntityManager,
+      ) =>
+        new GetProviderTransactionUseCase(
+          em,
+        ),
+    },
+
+    {
       provide: PendingReferenceWorker,
       inject: [EntityManager, WAGER_TRANSACTION_REPOSITORY, ProcessWagerTransactionUseCase],
       useFactory: (
@@ -90,7 +125,10 @@ import { PendingReferenceWorker } from './application/pending-reference.worker.j
     },
   ],
 
-  controllers: [WageringController],
+  controllers: [
+    WageringController,
+    ProviderTransactionController,
+  ],
 
   exports: [
     ProcessWagerTransactionUseCase,

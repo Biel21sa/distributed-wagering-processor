@@ -17,3 +17,12 @@ export class NegativeBalanceError extends DomainError {
     );
   }
 }
+
+export class WalletAlreadyExistsError extends DomainError {
+  constructor() {
+    super(
+      'Wallet already exists for this player and currency',
+      'WALLET_ALREADY_EXISTS',
+    );
+  }
+}

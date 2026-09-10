@@ -9,5 +9,9 @@ export default defineConfig({
     globals: true,
     root: './',
     include: ['**/*.spec.ts'],
+    // The integration specs all share a single Postgres instance. Running
+    // spec files in parallel makes their TRUNCATE-based cleanup deadlock and
+    // clobber each other's data, so execute one file at a time.
+    fileParallelism: false,
   },
 });
