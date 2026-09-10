@@ -6,9 +6,11 @@ export enum MessageErrorCategory {
 
 export class PermanentMessageError extends Error {
   readonly category = MessageErrorCategory.Permanent;
+  readonly code: string;
 
-  constructor(message: string) {
-    super(message);
+  constructor(code: string, message?: string) {
+    super(message ?? code);
+    this.code = message ? code : 'PERMANENT_MESSAGE_ERROR';
     this.name = 'PermanentMessageError';
   }
 }

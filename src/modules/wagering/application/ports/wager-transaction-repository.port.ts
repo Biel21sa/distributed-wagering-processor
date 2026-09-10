@@ -23,6 +23,12 @@ export interface WagerTransactionRepository {
     idempotencyKey: string,
   ): Promise<WagerTransaction | null>;
 
+  findPendingReferences(
+    em: EntityManager,
+    now: Date,
+    limit: number,
+  ): Promise<WagerTransaction[]>;
+
   save(
     em: EntityManager,
     transaction: WagerTransaction,

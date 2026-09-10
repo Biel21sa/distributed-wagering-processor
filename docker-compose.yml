@@ -37,6 +37,7 @@ services:
 
     volumes:
       - localstack_data:/var/lib/localstack
+      - ./docker/localstack/init/ready.d:/etc/localstack/init/ready.d
       - "/var/run/docker.sock:/var/run/docker.sock"
 
     healthcheck:

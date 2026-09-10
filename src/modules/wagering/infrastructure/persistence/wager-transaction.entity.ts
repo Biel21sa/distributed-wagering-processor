@@ -144,4 +144,17 @@ export class WagerTransactionEntity {
     length: 3,
   })
   responseBalanceCurrency?: string | null;
+
+  @Property({
+    type: 'integer',
+  })
+  referenceAttempts = 0;
+
+  @Property({
+    nullable: true,
+    type: 'datetime',
+  })
+  referenceNextAttemptAt?:
+    | Date
+    | null;
 }

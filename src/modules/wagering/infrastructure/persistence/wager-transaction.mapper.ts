@@ -79,6 +79,13 @@ export class WagerTransactionMapper {
       transaction.responseBalance
         ?.currency ?? null;
 
+    entity.referenceAttempts =
+      transaction.referenceAttempts;
+
+    entity.referenceNextAttemptAt =
+      transaction.referenceNextAttemptAt
+      ?? null;
+
     return entity;
   }
 }

@@ -22,6 +22,7 @@ import { WALLET_REPOSITORY } from './application/ports/wallet-repository.port.js
 import { WageringController } from './wagering.controller.js';
 import { OutboxModule } from '../outbox/outbox.module.js';
 import { OUTBOX_REPOSITORY, OutboxRepository } from '../outbox/application/outbox-repository.port.js';
+import { PendingReferenceWorker } from './application/pending-reference.worker.js';
 
 @Module({
   imports: [
@@ -76,6 +77,16 @@ import { OUTBOX_REPOSITORY, OutboxRepository } from '../outbox/application/outbo
           outboxRepository,
           em,
         ),
+    },
+
+    {
+      provide: PendingReferenceWorker,
+      inject: [EntityManager, WAGER_TRANSACTION_REPOSITORY, ProcessWagerTransactionUseCase],
+      useFactory: (
+        em,
+        transactionRepository,
+        processWager,
+      ) => new PendingReferenceWorker(em, transactionRepository, processWager),
     },
   ],
 

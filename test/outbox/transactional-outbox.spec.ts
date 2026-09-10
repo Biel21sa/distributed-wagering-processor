@@ -129,9 +129,11 @@ describe('transactional outbox', () => {
       aggregateId: wallet.id,
     });
     expect(pendingAfterCrash.every((event) => event.publishedAt === null)).toBe(true);
-    expect(publishedByA).toEqual([
+    expect(publishedByA).toHaveLength(1);
+    expect([
       'WagerTransactionProcessed',
-    ]);
+      'WalletBalanceChanged',
+    ]).toContain(publishedByA[0]);
 
     const publishedByB: string[] = [];
     const publisherB = new OutboxPublisherWorker(

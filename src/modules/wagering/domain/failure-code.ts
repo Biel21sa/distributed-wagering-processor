@@ -1,19 +1,37 @@
 export enum FailureCode {
-  InvalidTransaction = 'INVALID_TRANSACTION',
-  InsufficientFunds = 'INSUFFICIENT_FUNDS',
-  CurrencyMismatch = 'CURRENCY_MISMATCH',
+  InvalidTransaction =
+    'INVALID_TRANSACTION',
 
-  ReferenceNotFound = 'REFERENCE_NOT_FOUND',
-  ReferenceInvalid = 'REFERENCE_INVALID',
+  InsufficientFunds =
+    'INSUFFICIENT_FUNDS',
 
-  InvalidRefundReference = 'INVALID_REFUND_REFERENCE',
-  InvalidRollbackReference = 'INVALID_ROLLBACK_REFERENCE',
+  CurrencyMismatch =
+    'CURRENCY_MISMATCH',
 
-  DuplicateReversal = 'DUPLICATE_REVERSAL',
+  ReferenceNotFound =
+    'REFERENCE_NOT_FOUND',
 
-  NegativeBalance = 'NEGATIVE_BALANCE',
+  ReferenceInvalid =
+    'REFERENCE_INVALID',
 
-  IdempotencyConflict = 'IDEMPOTENCY_CONFLICT',
+  InvalidRefundReference =
+    'INVALID_REFUND_REFERENCE',
 
-  InternalError = 'INTERNAL_ERROR',
+  InvalidRollbackReference =
+    'INVALID_ROLLBACK_REFERENCE',
+
+  DuplicateReversal =
+    'DUPLICATE_REVERSAL',
+
+  NegativeBalance =
+    'NEGATIVE_BALANCE',
+
+  NegativeBalanceReversal =
+    'NEGATIVE_BALANCE_REVERSAL',
+
+  IdempotencyConflict =
+    'IDEMPOTENCY_CONFLICT',
+
+  InternalError =
+    'INTERNAL_ERROR',
 }

@@ -3,6 +3,7 @@ import { FailureCode } from "./failure-code.js";
 import { WagerTransactionKind } from "./wager-transaction-kind.js";
 import { WagerTransactionStatus } from "./wager-transaction-status.js";
 
+export const MAX_REFERENCE_ATTEMPTS = 10;
 
 export interface CreateWagerTransactionProps {
   id: string;
@@ -50,6 +51,9 @@ export interface WagerTransactionState {
   failureCode?: FailureCode;
   processedAt?: Date;
   responseBalance?: Money;
+
+  referenceAttempts: number;
+  referenceNextAttemptAt?: Date;
 }
 
 export class WagerTransaction {
@@ -84,6 +88,10 @@ export class WagerTransaction {
     private _processedAt?: Date,
 
     private _responseBalance?: Money,
+
+    private _referenceAttempts = 0,
+
+    private _referenceNextAttemptAt?: Date,
   ) { }
 
   static create(
@@ -183,6 +191,12 @@ export class WagerTransaction {
       props.createdAt ?? new Date(),
 
       WagerTransactionStatus.Pending,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      0,
+      undefined,
     );
   }
 
@@ -217,11 +231,21 @@ export class WagerTransaction {
 
       state.processedAt,
       state.responseBalance,
+      state.referenceAttempts,
+      state.referenceNextAttemptAt,
     );
   }
 
   get responseBalance(): Money | undefined {
     return this._responseBalance;
+  }
+
+  get referenceAttempts(): number {
+    return this._referenceAttempts;
+  }
+
+  get referenceNextAttemptAt(): Date | undefined {
+    return this._referenceNextAttemptAt;
   }
 
   get status(): WagerTransactionStatus {
@@ -301,6 +325,26 @@ export class WagerTransaction {
 
     this._status =
       WagerTransactionStatus.PendingReference;
+  }
+
+  scheduleReferenceRetry(now: Date): void {
+    this.assertNotTerminal();
+
+    this._referenceAttempts += 1;
+    const delaySeconds = Math.min(
+      5 * 2 ** Math.max(this._referenceAttempts - 1, 0),
+      300,
+    );
+    this._referenceNextAttemptAt = new Date(
+      now.getTime() + delaySeconds * 1000,
+    );
+  }
+
+  isReferenceRetryDue(now: Date): boolean {
+    return (
+      this._referenceNextAttemptAt === undefined ||
+      this._referenceNextAttemptAt <= now
+    );
   }
 
   reject(

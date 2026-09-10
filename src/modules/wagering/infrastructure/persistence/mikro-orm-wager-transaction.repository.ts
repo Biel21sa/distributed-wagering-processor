@@ -4,6 +4,7 @@ import { WagerTransactionRepository } from "../../application/ports/wager-transa
 import { WagerTransaction } from "../../domain/wager-transaction.js";
 import { WagerTransactionEntity } from "./wager-transaction.entity.js";
 import { WagerTransactionMapper } from "./wager-transaction.mapper.js";
+import { WagerTransactionStatus } from '../../domain/wager-transaction-status.js';
 
 
 export class MikroOrmWagerTransactionRepository
@@ -66,6 +67,29 @@ export class MikroOrmWagerTransactionRepository
     }
 
     return this.toDomain(entity);
+  }
+
+  async findPendingReferences(
+    em: EntityManager,
+    now: Date,
+    limit: number,
+  ): Promise<WagerTransaction[]> {
+    const entities = await em.find(
+      WagerTransactionEntity,
+      {
+        status: WagerTransactionStatus.PendingReference,
+        $or: [
+          { referenceNextAttemptAt: null },
+          { referenceNextAttemptAt: { $lte: now } },
+        ],
+      },
+      {
+        limit,
+        orderBy: { createdAt: 'asc' },
+      },
+    );
+
+    return entities.map((entity) => this.toDomain(entity));
   }
 
   async save(
@@ -150,6 +174,13 @@ export class MikroOrmWagerTransactionRepository
               entity.responseBalanceCurrency,
           })
           : undefined,
+
+      referenceAttempts:
+        entity.referenceAttempts,
+
+      referenceNextAttemptAt:
+        entity.referenceNextAttemptAt
+        ?? undefined,
     });
   }
 }

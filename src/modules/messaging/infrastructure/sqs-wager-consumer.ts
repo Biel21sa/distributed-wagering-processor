@@ -3,80 +3,95 @@ import {
   ReceiveMessageCommand,
   SQSClient,
 } from '@aws-sdk/client-sqs';
-import { OnModuleDestroy, OnModuleInit } from '@nestjs/common';
 import { ProcessInboxMessageUseCase } from '../../inbox/application/process-inbox-message.use-case.js';
-import {
-  classifyMessageError,
-  PermanentMessageError,
-} from '../application/message-error.js';
-import { validateWagerMessage } from '../application/validate-wager-message.js';
+import { parseWagerMessage } from '../application/message-parser.js';
+import { MessageProcessingError, MessageErrorType } from '../domain/message-errors.js';
 import { sqsClient } from './sqs.client.js';
 
-export class SqsWagerConsumer implements OnModuleInit, OnModuleDestroy {
+export const SHUTDOWN_TIMEOUT_MS = 25_000;
+
+export class SqsWagerConsumer {
   private running = false;
+  private inFlight = 0;
 
   constructor(
     private readonly processor:
       ProcessInboxMessageUseCase,
     private readonly client: SQSClient = sqsClient,
-  ) {}
-
-  onModuleInit(): void {
-    if (process.env.SQS_WAGER_QUEUE_URL) {
-      void this.start();
-    }
-  }
-
-  async onModuleDestroy(): Promise<void> {
-    await this.stop();
-  }
+  ) { }
 
   async start(): Promise<void> {
     this.running = true;
 
     while (this.running) {
       try {
-        const response =
-          await this.client.send(
-            new ReceiveMessageCommand({
-            QueueUrl:
-              process.env
-                .SQS_WAGER_QUEUE_URL!,
-
-            MaxNumberOfMessages: 10,
-
-            WaitTimeSeconds: 20,
-
-            VisibilityTimeout: 30,
-
-            MessageAttributeNames: [
-              'All',
-            ],
-            }),
-          );
-
-        const messages =
-          response.Messages ?? [];
-
-        for (const message of messages) {
-          try {
-            await this.processMessage(message);
-          } catch (error) {
-            console.error(
-              `SQS message left for redelivery (${classifyMessageError(error)})`,
-              error,
-            );
-          }
-        }
+        await this.poll();
       } catch (error) {
-        console.error('SQS receive failed; retrying', error);
-        await new Promise((resolve) => setTimeout(resolve, 1000));
+        console.error(
+          'SQS polling error',
+          error,
+        );
+
+        await this.sleep(1000);
       }
     }
   }
 
   async stop(): Promise<void> {
     this.running = false;
+  }
+
+  async shutdown(): Promise<void> {
+    await this.stop();
+
+    await Promise.race([
+      this.drain(),
+      this.sleep(SHUTDOWN_TIMEOUT_MS),
+    ]);
+  }
+
+  async drain(): Promise<void> {
+    while (this.inFlight > 0) {
+      await this.sleep(100);
+    }
+  }
+
+  private async poll(): Promise<void> {
+    const visibilityTimeout = Number(
+      process.env.SQS_VISIBILITY_TIMEOUT ?? 30,
+    );
+
+    const waitTimeSeconds = Number(
+      process.env.SQS_WAIT_TIME_SECONDS ?? 20,
+    );
+
+    const response =
+      await this.client.send(
+        new ReceiveMessageCommand({
+          QueueUrl:
+            process.env
+              .SQS_WAGER_QUEUE_URL!,
+
+          MaxNumberOfMessages: 10,
+
+          WaitTimeSeconds: waitTimeSeconds,
+
+          VisibilityTimeout: visibilityTimeout,
+
+          MessageAttributeNames: [
+            'All',
+          ],
+        }),
+      );
+
+    const messages =
+      response.Messages ?? [];
+
+    for (const message of messages) {
+      await this.handleMessage(
+        message,
+      );
+    }
   }
 
   async processMessage(
@@ -86,25 +101,91 @@ export class SqsWagerConsumer implements OnModuleInit, OnModuleDestroy {
       ReceiptHandle?: string;
     },
   ): Promise<void> {
-    if (
-      !message.MessageId ||
-      !message.Body ||
-      !message.ReceiptHandle
-    ) {
-      return;
-    }
+    await this.handleMessage(message);
+  }
 
-    let parsed: unknown;
+  private async handleMessage(
+    message: {
+      MessageId?: string;
+      Body?: string;
+      ReceiptHandle?: string;
+    },
+  ): Promise<void> {
+    this.inFlight += 1;
+    const receiptHandle =
+      message.ReceiptHandle;
+
     try {
-      parsed = JSON.parse(message.Body);
-    } catch {
-      throw new PermanentMessageError('Invalid JSON message body');
+      if (
+        !message.Body ||
+        !receiptHandle
+      ) {
+        return;
+      }
+
+      const parsed =
+        parseWagerMessage(
+          message.Body,
+        );
+
+      await this.processor.execute(
+        parsed,
+      );
+
+      await this.deleteMessage(
+        receiptHandle,
+      );
+    } catch (
+    error
+    ) {
+      if (
+        error instanceof
+        MessageProcessingError
+      ) {
+        if (
+          error.type ===
+          MessageErrorType.Business
+        ) {
+          if (receiptHandle) {
+            await this.deleteMessage(
+              receiptHandle,
+            );
+          }
+
+          return;
+        }
+
+        if (
+          error.type ===
+          MessageErrorType.Permanent
+        ) {
+          // Não tentamos processar novamente.
+          // A mensagem será encaminhada para DLQ
+          // conforme a política de redrive.
+          return;
+        }
+
+        if (
+          error.type ===
+          MessageErrorType.Transient
+        ) {
+          // Sem ACK.
+          // SQS irá disponibilizar novamente.
+          return;
+        }
+      }
+
+      // Erros desconhecidos são tratados
+      // como transitórios.
+      throw error;
+    } finally {
+      this.inFlight -= 1;
     }
+  }
 
-    await this.processor.execute(
-      validateWagerMessage(parsed),
-    );
-
+  private async deleteMessage(
+    receiptHandle: string,
+  ): Promise<void> {
     await this.client.send(
       new DeleteMessageCommand({
         QueueUrl:
@@ -112,8 +193,20 @@ export class SqsWagerConsumer implements OnModuleInit, OnModuleDestroy {
             .SQS_WAGER_QUEUE_URL!,
 
         ReceiptHandle:
-          message.ReceiptHandle,
+          receiptHandle,
       }),
+    );
+  }
+
+  private sleep(
+    milliseconds: number,
+  ): Promise<void> {
+    return new Promise(
+      (resolve) =>
+        setTimeout(
+          resolve,
+          milliseconds,
+        ),
     );
   }
 }
