@@ -9,6 +9,13 @@ import { WagerTransaction } from "../domain/wager-transaction.js";
 import { WagerTransactionRepository } from "./ports/wager-transaction-repository.port.js";
 import { WalletLedgerRepository } from "./ports/wallet-ledger-repository.port.js";
 import { WalletRepository } from "./ports/wallet-repository.port.js";
+import { OutboxRepository } from '../../outbox/application/outbox-repository.port.js';
+import { EventContext } from '../../outbox/application/event-factory.js';
+import { EventFactory } from '../../outbox/application/event-factory.js';
+import { OutboxMessage } from '../../outbox/domain/outbox-message.js';
+import { getUniqueViolationConstraint } from '../../../shared/infrastructure/database/postgres-error.js';
+import { IdempotencyConflictError } from '../domain/idempotency-conflict.error.js';
+import { buildIdempotentResponse } from './build-idempotent-response.js';
 
 
 export interface ProcessWagerTransactionInput {
@@ -32,6 +39,10 @@ export interface ProcessWagerTransactionInput {
   };
 
   referenceExternalTransactionId?: string;
+
+  correlationId?: string;
+
+  causationId?: string;
 }
 
 export interface ProcessWagerTransactionResult {
@@ -51,7 +62,8 @@ export interface ProcessWagerTransactionResult {
 
 export class ProcessWagerTransactionUseCase {
   constructor(
-    private readonly walletRepository: WalletRepository,
+    private readonly walletRepository:
+      WalletRepository,
 
     private readonly transactionRepository:
       WagerTransactionRepository,
@@ -59,23 +71,55 @@ export class ProcessWagerTransactionUseCase {
     private readonly ledgerRepository:
       WalletLedgerRepository,
 
-    private readonly em: EntityManager,
+    private readonly outboxRepository:
+      OutboxRepository,
+
+    private readonly em:
+      EntityManager,
   ) { }
 
   async execute(
     input: ProcessWagerTransactionInput,
   ) {
-    return this.em.transactional(
-      async (em) => {
-        return this.executeWithinTransaction(
-          em,
-          input,
+    try {
+      return await this.em.transactional(
+        async (em) => {
+          return this.executeWithinTransaction(
+            em,
+            input,
+          );
+        },
+        {
+          clear: true,
+        },
+      );
+    } catch (error) {
+      const constraint =
+        getUniqueViolationConstraint(error);
+
+      if (
+        constraint !== 'uq_wager_idempotency_key' &&
+        constraint !== 'uq_wager_provider_external_id'
+      ) {
+        throw error;
+      }
+
+      const existing =
+        await this.transactionRepository.findByIdempotencyKey(
+          this.em,
+          input.idempotencyKey,
         );
-      },
-      {
-        clear: true,
-      },
-    );
+
+      if (!existing) {
+        throw error;
+      }
+
+      if (!existing.matchesPayload(input.payloadHash)) {
+        throw new IdempotencyConflictError();
+      }
+
+      return buildIdempotentResponse(existing);
+    }
   }
 
   async executeWithinTransaction(
@@ -129,6 +173,15 @@ export class ProcessWagerTransactionUseCase {
         referenceExternalTransactionId:
           input.referenceExternalTransactionId,
       });
+
+    const eventContext: EventContext = {
+      correlationId:
+        input.correlationId
+        ?? randomUUID(),
+
+      causationId:
+        input.causationId,
+    };
 
     const wallet =
       await this.walletRepository
@@ -289,6 +342,57 @@ export class ProcessWagerTransactionUseCase {
         );
       }
 
+      if (transaction.status === WagerTransactionStatus.Processed) {
+        const processedEvent =
+          EventFactory.transactionProcessed(
+            transaction,
+            wallet,
+            eventContext,
+          );
+
+        await this.outboxRepository.save(
+          em,
+          OutboxMessage.enqueue(
+            processedEvent,
+          ),
+        );
+      }
+
+      if (ledgerEntry) {
+        const balanceChangedEvent =
+          EventFactory.balanceChanged(
+            transaction,
+            wallet,
+            ledgerEntry,
+            eventContext,
+          );
+
+        await this.outboxRepository.save(
+          em,
+          OutboxMessage.enqueue(
+            balanceChangedEvent,
+          ),
+        );
+      }
+
+      if (
+        transaction.status ===
+        WagerTransactionStatus.PendingReference
+      ) {
+        const pendingEvent =
+          EventFactory.pendingReference(
+            transaction,
+            eventContext,
+          );
+
+        await this.outboxRepository.save(
+          em,
+          OutboxMessage.enqueue(
+            pendingEvent,
+          ),
+        );
+      }
+
       return {
         transactionId:
           transaction.id,
@@ -320,6 +424,20 @@ export class ProcessWagerTransactionUseCase {
         await this.transactionRepository.save(
           em,
           transaction,
+        );
+
+        const rejectedEvent =
+          EventFactory.transactionRejected(
+            transaction,
+            wallet,
+            eventContext,
+          );
+
+        await this.outboxRepository.save(
+          em,
+          OutboxMessage.enqueue(
+            rejectedEvent,
+          ),
         );
 
         return {

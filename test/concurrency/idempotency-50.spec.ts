@@ -11,6 +11,8 @@ import { WagerTransactionKind } from '../../src/modules/wagering/domain/wager-tr
 import { WagerTransactionStatus } from '../../src/modules/wagering/domain/wager-transaction-status.js';
 import { MikroOrmWagerTransactionRepository } from '../../src/modules/wagering/infrastructure/persistence/mikro-orm-wager-transaction.repository.js';
 import { WagerTransactionEntity } from '../../src/modules/wagering/infrastructure/persistence/wager-transaction.entity.js';
+import { MikroOrmOutboxRepository } from '../../src/modules/outbox/infrastructure/persistence/mikro-orm-outbox.repository.js';
+import { OutboxMessageEntity } from '../../src/modules/outbox/infrastructure/persistence/outbox-message.entity.js';
 import { MikroOrmWalletLedgerRepository } from '../../src/modules/wallet/infrastructure/persistence/mikro-orm-wallet-ledger.repository.js';
 import { MikroOrmWalletRepository } from '../../src/modules/wallet/infrastructure/persistence/mikro-orm-wallet.repository.js';
 import { WalletLedgerEntryEntity } from '../../src/modules/wallet/infrastructure/persistence/wallet-ledger-entry.entity.js';
@@ -31,6 +33,7 @@ describe('persistent wager idempotency', () => {
     const em = orm.em.fork();
     await em.nativeDelete(WalletLedgerEntryEntity, {});
     await em.nativeDelete(WagerTransactionEntity, {});
+    await em.nativeDelete(OutboxMessageEntity, {});
     await em.nativeDelete(WalletEntity, {});
   });
 
@@ -54,6 +57,14 @@ describe('persistent wager idempotency', () => {
     expect(transaction.payloadHash).toBe(payloadHash);
     expect(transaction.responseBalanceAmount).toBe('75.00');
     expect(transaction.responseBalanceCurrency).toBe(currency);
+
+    const events = await orm.em.fork().find(OutboxMessageEntity, {
+      aggregateId: wallet.id,
+    });
+    expect(events.map((event) => event.eventType).sort()).toEqual([
+      'WagerTransactionProcessed',
+      'WalletBalanceChanged',
+    ]);
   });
 
   it('replays the same operation without a second debit, ledger, or transaction', async () => {
@@ -209,6 +220,7 @@ describe('persistent wager idempotency', () => {
       new MikroOrmWalletRepository(),
       new MikroOrmWagerTransactionRepository(em),
       new MikroOrmWalletLedgerRepository(),
+      new MikroOrmOutboxRepository(),
       em,
     ).execute(input);
   }
@@ -216,7 +228,7 @@ describe('persistent wager idempotency', () => {
   async function initializeOrm(): Promise<MikroORM> {
     return MikroORM.init({
       ...mikroOrmConfig,
-      entities: [WalletEntity, WalletLedgerEntryEntity, WagerTransactionEntity],
+      entities: [WalletEntity, WalletLedgerEntryEntity, WagerTransactionEntity, OutboxMessageEntity],
     });
   }
 

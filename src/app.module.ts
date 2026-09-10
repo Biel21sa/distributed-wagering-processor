@@ -6,6 +6,7 @@ import { WalletModule } from './modules/wallet/wallet.module.js';
 import { WageringModule } from './modules/wagering/wagering.module.js';
 import { InboxModule } from './modules/inbox/inbox.module.js';
 import { MessagingModule } from './modules/messaging/messaging.module.js';
+import { OutboxModule } from './modules/outbox/outbox.module.js';
 
 @Module({
   imports: [
@@ -19,6 +20,7 @@ import { MessagingModule } from './modules/messaging/messaging.module.js';
     WageringModule,
     InboxModule,
     MessagingModule,
+    OutboxModule,
   ],
 })
 export class AppModule { }

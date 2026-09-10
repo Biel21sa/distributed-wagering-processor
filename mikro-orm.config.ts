@@ -7,6 +7,7 @@ import { WalletEntity } from './src/modules/wallet/infrastructure/persistence/wa
 import { WalletLedgerEntryEntity } from './src/modules/wallet/infrastructure/persistence/wallet-ledger-entry.entity.js';
 import { WagerTransactionEntity } from './src/modules/wagering/infrastructure/persistence/wager-transaction.entity.js';
 import { InboxMessageEntity } from './src/modules/inbox/infrastructure/persistence/inbox-message.entity.js';
+import { OutboxMessageEntity } from './src/modules/outbox/infrastructure/persistence/outbox-message.entity.js';
 
 export default defineConfig({
   host: process.env.DB_HOST ?? 'localhost',
@@ -21,6 +22,7 @@ export default defineConfig({
     WalletLedgerEntryEntity,
     WagerTransactionEntity,
     InboxMessageEntity,
+    OutboxMessageEntity,
   ],
 
   metadataProvider: ReflectMetadataProvider,

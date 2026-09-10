@@ -8,6 +8,8 @@ import { WagerTransactionKind } from '../../src/modules/wagering/domain/wager-tr
 import { WagerTransactionStatus } from '../../src/modules/wagering/domain/wager-transaction-status.js';
 import { MikroOrmWagerTransactionRepository } from '../../src/modules/wagering/infrastructure/persistence/mikro-orm-wager-transaction.repository.js';
 import { WagerTransactionEntity } from '../../src/modules/wagering/infrastructure/persistence/wager-transaction.entity.js';
+import { MikroOrmOutboxRepository } from '../../src/modules/outbox/infrastructure/persistence/mikro-orm-outbox.repository.js';
+import { OutboxMessageEntity } from '../../src/modules/outbox/infrastructure/persistence/outbox-message.entity.js';
 import { WalletLedgerEntry } from '../../src/modules/wallet/domain/wallet-ledger-entry.js';
 import { MikroOrmWalletLedgerRepository } from '../../src/modules/wallet/infrastructure/persistence/mikro-orm-wallet-ledger.repository.js';
 import { MikroOrmWalletRepository } from '../../src/modules/wallet/infrastructure/persistence/mikro-orm-wallet.repository.js';
@@ -35,6 +37,7 @@ describe('wallet wagering integration', () => {
         WalletEntity,
         WalletLedgerEntryEntity,
         WagerTransactionEntity,
+        OutboxMessageEntity,
       ],
     });
     await orm.migrator.up();
@@ -44,6 +47,7 @@ describe('wallet wagering integration', () => {
     const em = orm.em.fork();
     await em.nativeDelete(WalletLedgerEntryEntity, {});
     await em.nativeDelete(WagerTransactionEntity, {});
+    await em.nativeDelete(OutboxMessageEntity, {});
     await em.nativeDelete(WalletEntity, {});
   });
 
@@ -75,6 +79,7 @@ describe('wallet wagering integration', () => {
       balanceBefore: '100.00',
       balanceAfter: '75.00',
     });
+    expect(await orm.em.fork().count(OutboxMessageEntity, { aggregateId: wallet.id })).toBe(2);
   });
 
   it('allows only one of two simultaneous BET 80 operations', async () => {
@@ -136,6 +141,10 @@ describe('wallet wagering integration', () => {
     expect(storedWallet.balance).toBe('100.00');
     expect(storedWallet.version).toBe(1);
     expect(await orm.em.fork().count(WalletLedgerEntryEntity)).toBe(0);
+    const events = await orm.em.fork().find(OutboxMessageEntity, { aggregateId: wallet.id });
+    expect(events.map((event) => event.eventType)).toEqual([
+      'WagerTransactionProcessed',
+    ]);
   });
 
   it('processes WIN with a credit and increments the wallet version', async () => {
@@ -165,6 +174,7 @@ describe('wallet wagering integration', () => {
       balanceBefore: '100.00',
       balanceAfter: '150.00',
     });
+    expect(await orm.em.fork().count(OutboxMessageEntity, { aggregateId: wallet.id })).toBe(2);
   });
 
   it('increments version for consecutive BET and WIN operations', async () => {
@@ -181,6 +191,30 @@ describe('wallet wagering integration', () => {
     expect(storedWallet.version).toBe(3);
   });
 
+  it('publishes rejected and pending-reference events without a ledger', async () => {
+    const wallet = await createWallet('50.00');
+
+    const rejected = await processWager({
+      ...betInput(wallet.id, '100.00'),
+    });
+    expect(rejected.status).toBe(WagerTransactionStatus.Rejected);
+
+    const pending = await processWager({
+      ...betInput(wallet.id, '25.00'),
+      externalTransactionId: 'refund-1',
+      idempotencyKey: 'key-refund-1',
+      kind: WagerTransactionKind.Refund,
+      referenceExternalTransactionId: 'bet-not-found',
+    });
+    expect(pending.status).toBe('PENDING_REFERENCE');
+
+    const events = await orm.em.fork().find(OutboxMessageEntity, { aggregateId: wallet.id });
+    expect(events.map((event) => event.eventType).sort()).toEqual([
+      'WagerTransactionPendingReference',
+      'WagerTransactionRejected',
+    ]);
+    expect(await orm.em.fork().count(WalletLedgerEntryEntity, { walletId: wallet.id })).toBe(0);
+  });
   async function createWallet(balance: string): Promise<WalletEntity> {
     const em = orm.em.fork();
     const wallet = em.create(WalletEntity, {
@@ -215,6 +249,7 @@ describe('wallet wagering integration', () => {
       new MikroOrmWalletRepository(),
       new MikroOrmWagerTransactionRepository(em),
       ledgerRepository,
+      new MikroOrmOutboxRepository(),
       em,
     );
   }

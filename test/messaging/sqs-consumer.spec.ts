@@ -5,6 +5,8 @@ import mikroOrmConfig from '../../mikro-orm.config.js';
 import { ProcessInboxMessageUseCase } from '../../src/modules/inbox/application/process-inbox-message.use-case.js';
 import { MikroOrmInboxRepository } from '../../src/modules/inbox/infrastructure/persistence/mikro-orm-inbox.repository.js';
 import { InboxMessageEntity } from '../../src/modules/inbox/infrastructure/persistence/inbox-message.entity.js';
+import { MikroOrmOutboxRepository } from '../../src/modules/outbox/infrastructure/persistence/mikro-orm-outbox.repository.js';
+import { OutboxMessageEntity } from '../../src/modules/outbox/infrastructure/persistence/outbox-message.entity.js';
 import { SqsWagerConsumer } from '../../src/modules/messaging/infrastructure/sqs-wager-consumer.js';
 import { WagerTransactionKind } from '../../src/modules/wagering/domain/wager-transaction-kind.js';
 import { ProcessWagerTransactionUseCase } from '../../src/modules/wagering/application/process-wager-transaction.use-case.js';
@@ -28,6 +30,7 @@ describe('SQS wager consumer', () => {
         WalletLedgerEntryEntity,
         WagerTransactionEntity,
         InboxMessageEntity,
+        OutboxMessageEntity,
       ],
     });
     await orm.migrator.up();
@@ -36,6 +39,7 @@ describe('SQS wager consumer', () => {
   beforeEach(async () => {
     const em = orm.em.fork();
     await em.nativeDelete(InboxMessageEntity, {});
+    await em.nativeDelete(OutboxMessageEntity, {});
     await em.nativeDelete(WalletLedgerEntryEntity, {});
     await em.nativeDelete(WagerTransactionEntity, {});
     await em.nativeDelete(WalletEntity, {});
@@ -104,6 +108,7 @@ describe('SQS wager consumer', () => {
       new MikroOrmWalletRepository(),
       new MikroOrmWagerTransactionRepository(em),
       new MikroOrmWalletLedgerRepository(),
+      new MikroOrmOutboxRepository(),
       em,
     );
     const processor = new ProcessInboxMessageUseCase(

@@ -20,6 +20,8 @@ import { MikroOrmWagerTransactionRepository } from './infrastructure/persistence
 import { WagerTransactionEntity } from './infrastructure/persistence/wager-transaction.entity.js';
 import { WALLET_REPOSITORY } from './application/ports/wallet-repository.port.js';
 import { WageringController } from './wagering.controller.js';
+import { OutboxModule } from '../outbox/outbox.module.js';
+import { OUTBOX_REPOSITORY, OutboxRepository } from '../outbox/application/outbox-repository.port.js';
 
 @Module({
   imports: [
@@ -28,6 +30,7 @@ import { WageringController } from './wagering.controller.js';
     ]),
 
     WalletModule,
+    OutboxModule,
   ],
 
   providers: [
@@ -55,6 +58,7 @@ import { WageringController } from './wagering.controller.js';
         WALLET_REPOSITORY,
         WAGER_TRANSACTION_REPOSITORY,
         WALLET_LEDGER_REPOSITORY,
+        OUTBOX_REPOSITORY,
         EntityManager,
       ],
 
@@ -62,12 +66,14 @@ import { WageringController } from './wagering.controller.js';
         walletRepository,
         transactionRepository,
         ledgerRepository,
+        outboxRepository,
         em,
       ) =>
         new ProcessWagerTransactionUseCase(
           walletRepository,
           transactionRepository,
           ledgerRepository,
+          outboxRepository,
           em,
         ),
     },
