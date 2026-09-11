@@ -96,11 +96,36 @@ export class MikroOrmWagerTransactionRepository
     em: EntityManager,
     transaction: WagerTransaction,
   ): Promise<void> {
-    const entity =
+    const mapped =
       WagerTransactionMapper
         .toEntity(transaction);
 
-    em.persist(entity);
+    // A transaction may be saved more than once across its lifecycle: first
+    // when created, then again when a PENDING_REFERENCE row is resolved by
+    // the worker. Persisting a fresh mapper instance with an existing id
+    // would trigger an INSERT and collide on the primary key, so load the
+    // managed row when it already exists and update it in place.
+    const existing =
+      await em.findOne(
+        WagerTransactionEntity,
+        { id: transaction.id },
+      );
+
+    if (!existing) {
+      em.persist(mapped);
+      return;
+    }
+
+    em.assign(existing, {
+      status: mapped.status,
+      referenceTransactionId: mapped.referenceTransactionId,
+      failureCode: mapped.failureCode,
+      processedAt: mapped.processedAt,
+      responseBalanceAmount: mapped.responseBalanceAmount,
+      responseBalanceCurrency: mapped.responseBalanceCurrency,
+      referenceAttempts: mapped.referenceAttempts,
+      referenceNextAttemptAt: mapped.referenceNextAttemptAt,
+    });
   }
 
   private toDomain(

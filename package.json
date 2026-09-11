@@ -14,6 +14,8 @@
     "lint": "eslint \"{src,test}/**/*.ts\" --fix",
     "test": "bun test",
     "test:watch": "bun test --watch",
+    "test:integration": "bun test --timeout 30000 test/integration",
+    "test:concurrency": "bun test --timeout 30000 test/concurrency",
     "migration:create": "mikro-orm migration:create --config ./mikro-orm.config.ts",
     "migration:up": "mikro-orm migration:up --config ./mikro-orm.config.ts",
     "migration:down": "mikro-orm migration:down --config ./mikro-orm.config.ts",

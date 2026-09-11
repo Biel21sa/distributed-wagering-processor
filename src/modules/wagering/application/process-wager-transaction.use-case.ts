@@ -614,8 +614,12 @@ export class ProcessWagerTransactionUseCase {
       try {
         wallet.debit(transaction.money);
       } catch {
+        // This debit path is only reached while reversing a prior
+        // transaction (refund/rollback). A reversal that would drive the
+        // balance negative is distinct from a direct BET without funds, so
+        // it gets its own failure code the challenge requires us to expose.
         transaction.reject(
-          FailureCode.InsufficientFunds,
+          FailureCode.NegativeBalanceReversal,
           wallet.balance,
         );
         return undefined;
